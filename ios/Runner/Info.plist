@@ -71,12 +71,12 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>zalo-2996379276447803360</string>
+				<string>zalo-2789092876920234284</string>
 			</array>
 		</dict>
 	</array>
 	<key>ZaloAppID</key>
-	<string>2996379276447803360</string>
+	<string>2789092876920234284</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>zalosdk</string>
