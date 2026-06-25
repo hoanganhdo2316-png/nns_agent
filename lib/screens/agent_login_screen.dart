@@ -3,10 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:zalo_flutter/zalo_flutter.dart';
 import 'dart:convert';
 import 'agent_screen.dart';
 
 const Color kBlue = Color(0xFF1565C0);
+const _storage = FlutterSecureStorage();
 
 class AgentLoginScreen extends StatefulWidget {
   const AgentLoginScreen({super.key});
@@ -18,8 +21,9 @@ class AgentLoginScreen extends StatefulWidget {
 class _AgentLoginScreenState extends State<AgentLoginScreen> {
   final _phoneCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
-  bool _isLoading  = false;
-  bool _obscure    = true;
+  bool _isLoading       = false;
+  bool _isZaloLoading   = false;
+  bool _obscure         = true;
   String? _error;
 
   Future<void> _login() async {
@@ -28,6 +32,27 @@ class _AgentLoginScreenState extends State<AgentLoginScreen> {
       setState(() => _error = 'Vui lòng nhập đầy đủ thông tin');
       return;
     }
+
+    // Demo account for Apple reviewer
+    if (_phoneCtrl.text.trim() == '0000000000') {
+      setState(() { _isLoading = true; _error = null; });
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('display_name', 'Demo Agent');
+        await prefs.setString('zalo_id', 'demo_reviewer');
+        await _storage.write(key: 'agent_jwt', value: 'demo_jwt_reviewer');
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const AgentScreen()),
+          (route) => false,
+        );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+      return;
+    }
+
     setState(() { _isLoading = true; _error = null; });
 
     try {
@@ -60,6 +85,57 @@ class _AgentLoginScreenState extends State<AgentLoginScreen> {
       setState(() => _error = 'Lỗi kết nối mạng, vui lòng kiểm tra lại Wifi/3G/4G');
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loginWithZalo() async {
+    HapticFeedback.mediumImpact();
+    setState(() { _isZaloLoading = true; _error = null; });
+
+    try {
+      final oauthCode = await ZaloFlutter.login();
+      if (oauthCode == null) {
+        setState(() => _error = 'Đăng nhập Zalo bị huỷ');
+        return;
+      }
+      final token = oauthCode['accessToken'] ?? oauthCode['access_token'];
+
+      if (token == null || (token as String).isEmpty) {
+        setState(() => _error = 'Không lấy được token từ Zalo');
+        return;
+      }
+
+      final res = await http.post(
+        Uri.parse('https://api.nns.id.vn/agent/zalo-login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'access_token': token}),
+      );
+
+      final data = jsonDecode(res.body);
+
+      if (res.statusCode == 200) {
+        final jwt         = data['access_token']?.toString() ?? '';
+        final displayName = data['name']?.toString() ?? '';
+        final zaloId      = data['zalo_id']?.toString() ?? '';
+
+        await _storage.write(key: 'agent_jwt', value: jwt);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('display_name', displayName);
+        await prefs.setString('zalo_id', zaloId);
+
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const AgentScreen()),
+          (route) => false,
+        );
+      } else {
+        setState(() => _error = data['detail'] ?? 'Tài khoản Zalo chưa được đăng ký đại lý');
+      }
+    } catch (e) {
+      setState(() => _error = 'Đăng nhập Zalo thất bại, vui lòng thử lại');
+    } finally {
+      if (mounted) setState(() => _isZaloLoading = false);
     }
   }
 
@@ -166,7 +242,7 @@ class _AgentLoginScreenState extends State<AgentLoginScreen> {
                       ],
                       const SizedBox(height: 20),
 
-                      // Nút đăng nhập
+                      // Nút đăng nhập SĐT
                       SizedBox(
                         height: 50,
                         child: ElevatedButton(
@@ -183,6 +259,43 @@ class _AgentLoginScreenState extends State<AgentLoginScreen> {
                                       color: Colors.white, strokeWidth: 2.5))
                               : const Text('Đăng nhập',
                                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Divider
+                      Row(
+                        children: [
+                          const Expanded(child: Divider()),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text('hoặc',
+                                style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                          ),
+                          const Expanded(child: Divider()),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Nút đăng nhập Zalo
+                      SizedBox(
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: _isZaloLoading ? null : _loginWithZalo,
+                          icon: _isZaloLoading
+                              ? const SizedBox(
+                                  width: 20, height: 20,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2.5))
+                              : const Icon(Icons.chat_bubble, size: 20),
+                          label: const Text('Đăng nhập bằng Zalo',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0068FF),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),

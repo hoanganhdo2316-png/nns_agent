@@ -66,5 +66,21 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>zalo-2996379276447803360</string>
+			</array>
+		</dict>
+	</array>
+	<key>ZaloAppID</key>
+	<string>2996379276447803360</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>zalosdk</string>
+		<string>zalo-authenticate</string>
+	</array>
 </dict>
 </plist>
